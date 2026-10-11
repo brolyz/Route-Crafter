@@ -2,6 +2,53 @@
 
 Route Crafter is a web app to automatically generate the most efficient .gpx route covering every street in an area. Created by me to generate routes to collect my own street-view/360 imagery for [Google Street View, Mapillary, Panoramax etc.](https://wiki.openstreetmap.org/wiki/Street-level_imagery_services)
 
+## Run on your server
+
+The app is static: it needs no Java compilation, npm build, database or server API keys. With Docker and Docker Compose installed, run these commands from the repository root:
+
+```sh
+docker build -t route-crafter:local .
+docker compose up -d --no-build
+docker compose ps
+```
+
+The container serves the app on your server's port **8080**, runs as an unprivileged user, and includes an HTTP health check. You can also build and start in one command with `docker compose up -d --build`. To use your own image tag or port:
+
+```sh
+ROUTE_CRAFTER_IMAGE=route-crafter:v1 ROUTE_CRAFTER_PORT=8090 docker compose up -d --build
+```
+
+See [the complete deployment and usage guide in Portuguese](docs/SELF_HOSTING.pt-BR.md) for updates, custom images, reverse proxies and network requirements.
+
+For local development, run `python3 -m http.server 8000` from this directory. Dependencies are vendored; there is no install step. Geometry tests use Node.js 22+ and the vendored Turf library:
+
+```sh
+node --test tests/road-edits.test.mjs
+```
+
+An optional browser smoke test covers fetching fixture roads, exclusion polygons, snapping a manual bypass, route generation, GPX export and editing/reset. Install its tooling outside the checkout and run it while the local server is running:
+
+```sh
+npm install --prefix /tmp/route-crafter-browser-tools --cache /tmp/route-crafter-npm-cache --no-audit --no-fund playwright@1.58.2
+PLAYWRIGHT_MODULE=/tmp/route-crafter-browser-tools/node_modules/playwright node tests/browser-smoke.cjs
+```
+
+This test uses system Chromium at `/usr/bin/chromium`; set `CHROMIUM_PATH` if it is installed elsewhere, and `ROUTE_CRAFTER_URL` to test another server. It mocks tiles and Overpass to test application behavior independently of external service availability.
+
+## Google map layers
+
+The map layer selector includes **Google Maps** (streets), **Google Satellite** (imagery) and **Google Hybrid** (imagery with labels and streets). These use direct Google raster tiles without loading the Google Maps SDK or requiring an API key. Google attribution stays visible on the map. Direct tile endpoints are undocumented and may change or become unavailable; their use remains subject to Google's service terms.
+
+## Exclusions and manual passages
+
+After selecting/drawing an area and clicking **Fetch Roads**, use **Draw exclusion** to mark an area where the route must not travel. Finish by clicking the first point. The portions of roads inside the polygon are removed, including roads crossing it without an OSM vertex inside. Roads outside the polygon remain available. Exclusions also apply to manually added passages.
+
+Use **Draw manual passage** to add a missing road or connection. Finish by clicking the last point. The endpoints snap to existing road segments within the chosen distance (25 meters by default), and crossings become shared routing vertices. These passages are bidirectional and mandatory, including with the Windy Rural solver and coverage filtering. Snapping updates the routing geometry; the purple drawing keeps the points you drew so you can adjust it.
+
+Use the map toolbar labeled **Edit exclusions and manual passages** or **Delete exclusions and manual passages**, then **Save**, to change or remove the drawings. Editing reuses the downloaded roads and clears any previous route; click **Generate Route** to recompute and then **Export GPX**. Removing an exclusion restores the original roads. A disconnected-passage message means you must connect its endpoints or increase the snap distance. The solver's existing largest-component behavior still applies, so disconnecting the road network can omit isolated sections.
+
+Edits remain in the current page session and apply again when roads are fetched or uploaded. **Reset**, changing the area mode or reloading the page clears them.
+
 ## Search Map
 If you know the name of a place and want to quickly jump there, you can use the search map feature. This is not required as part of route generation. This uses the OpenStreetMap Nominatim service.
 

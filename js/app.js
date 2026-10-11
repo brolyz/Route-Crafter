@@ -5,6 +5,7 @@ import { RoutingManager } from './routing.js';
 import { CoverageManager } from './coverage.js';
 import { AreaManager } from './area-manager.js';
 import { RoadProcessor } from './road-processor.js';
+import { RouteEditor } from './route-editor.js';
 import { GraphBuilder } from './graph-builder.js';
 import { SolutionVisualizer } from './solution-visualizer.js';
 import { stopSpinner } from './utils.js';
@@ -95,6 +96,8 @@ export class RouteCrafterApp {
         
         // Initialize road processor
         this.roadProcessor = new RoadProcessor(this.mapManager, this.areaManager, this.coverageManager);
+        this.routeEditor = new RouteEditor(this.mapManager, () => this.applyRouteEdits());
+        this.roadProcessor.routeEditor = this.routeEditor;
         
         // Initialize graph builder
         this.graphBuilder = new GraphBuilder();
@@ -357,11 +360,12 @@ export class RouteCrafterApp {
 
         // Draw events
         this.mapManager.getMap().on(L.Draw.Event.CREATED, (event) => {
-            this.areaManager.handleDrawCreated(event);
+            if (!this.routeEditor.handleDrawCreated(event)) this.areaManager.handleDrawCreated(event);
         });
 
         // Handle draw deleted event
         this.mapManager.getMap().on(L.Draw.Event.DELETED, (event) => {
+            if (this.routeEditor.handleLayersChanged(event)) return;
             const layers = event.layers;
             const highlightedPolygons = this.areaManager.getHighlightedPolygons();
             layers.eachLayer((layer) => {
@@ -377,6 +381,7 @@ export class RouteCrafterApp {
 
         // Handle draw edited event
         this.mapManager.getMap().on(L.Draw.Event.EDITED, (event) => {
+            if (this.routeEditor.handleLayersChanged(event)) return;
             // Update preview after editing
             this.areaManager.previewCombinedPolygon();
         });
@@ -817,6 +822,28 @@ export class RouteCrafterApp {
         });
     }
 
+    applyRouteEdits() {
+        if (!this.roadProcessor.getGeoJsonLayer()) {
+            this.routeEditor.updateStatus();
+            return;
+        }
+        const features = this.roadProcessor.reapplyRouteEdits();
+        this.createCoordinateMappings(features);
+        this.solutionVisualizer.clearLayers();
+        this.routingManager.stopAnimation();
+        this.routingManager.setRoutePoints([]);
+        this.routeGenerated = false;
+        this.routeStale = true;
+        window.largestComponentRequiredRoadLengthKm = null;
+        window.totalRoadLengthKm = features.reduce((total, feature) => total + turf.length(feature), 0);
+        window.requiredRoadLengthKm = features.filter(feature => feature.properties.isRouteRequired)
+            .reduce((total, feature) => total + turf.length(feature), 0);
+        document.getElementById('routeLength').textContent =
+            `Edited roads: ${features.length} segments · Required length: ${window.requiredRoadLengthKm.toFixed(2)} km`;
+        this.updateStaleSettingsWarning();
+        this.updateSetStartingLocationButtonState();
+    }
+
     createCoordinateMappings(roadFeatures) {
         this.largestComponentCoordinateToNodeIdMap.clear();
         this.largestComponentNodeIdToCoordinateMap.clear();
@@ -1226,6 +1253,7 @@ export class RouteCrafterApp {
             this.areaManager.clearLayers();
 
             // Clear drawn items
+            this.routeEditor.reset();
             this.mapManager.getDrawnItems().clearLayers();
 
             // Clear road processor layers

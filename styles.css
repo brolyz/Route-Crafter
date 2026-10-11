@@ -542,6 +542,27 @@ button:hover {
     flex: 1 1 100px;
 }
 
+.route-editor-controls {
+    margin: 4px 0;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+}
+
+.route-editor-controls p, #routeEditsStatus {
+    font-size: 12px;
+    line-height: 1.4;
+    margin: 6px 0 0;
+}
+
+.route-editor-controls button.active {
+    background: #7c3aed;
+}
+
+#drawExclusionButton.active {
+    background: #dc3545;
+}
+
 #setStartingLocationButton.active {
     background-color: #198754;
 }

@@ -65,6 +65,15 @@ export class MapManager {
     setupBasemaps() {
         // Define basemap layers
         this.baseMaps = {
+            "Google Maps": L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+                subdomains: '0123', maxZoom: 20, attribution: '&copy; Google'
+            }),
+            "Google Satellite": L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+                subdomains: '0123', maxZoom: 20, attribution: '&copy; Google'
+            }),
+            "Google Hybrid": L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                subdomains: '0123', maxZoom: 20, attribution: '&copy; Google'
+            }),
             "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -317,6 +326,17 @@ export class MapManager {
                         <button id="exportGPXButton">Export GPX</button>
                         <button id="clearButton">Reset</button>
                         </div>
+                        <fieldset class="route-editor-controls">
+                            <legend>Edit roads</legend>
+                            <div class="main-controls-actions">
+                                <button id="drawExclusionButton" type="button">Draw exclusion</button>
+                                <button id="drawPassageButton" type="button">Draw manual passage</button>
+                            </div>
+                            <label for="passageSnapMeters">Snap passage endpoints to roads within (meters):</label>
+                            <input id="passageSnapMeters" type="number" min="0" max="500" step="1" value="25">
+                            <p>Finish a polygon by clicking its first point; finish a passage by clicking its last point. Use the map edit/delete toolbar to change these drawings. Exclusions also cut manual passages. Click Generate Route after editing.</p>
+                            <div id="routeEditsStatus" role="status" aria-live="polite"></div>
+                        </fieldset>
                         <div id="staleSettingsWarning" class="stale-settings-warning" role="status" aria-live="polite" hidden></div>
                         <div class="main-controls-row">
                             <label for="bufferSize">Add buffer to selected areas (meters):</label>

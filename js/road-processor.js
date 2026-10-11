@@ -9,6 +9,8 @@ export class RoadProcessor {
         this.coverageManager = coverageManager;
         
         this.geoJsonLayer = null;
+        this.originalRoadFeatures = [];
+        this.routeEditor = null;
     }
 
     getGeoJsonLayer() {
@@ -17,6 +19,19 @@ export class RoadProcessor {
 
     setGeoJsonLayer(layer) {
         this.geoJsonLayer = layer;
+    }
+
+    prepareRoadFeatures(features) {
+        this.originalRoadFeatures = structuredClone(features);
+        return this.routeEditor ? this.routeEditor.apply(this.originalRoadFeatures) : features;
+    }
+
+    reapplyRouteEdits() {
+        const features = this.routeEditor.apply(this.originalRoadFeatures);
+        // Reuse the layer's style and click/popup handlers for the edited geometry.
+        this.geoJsonLayer.clearLayers();
+        this.geoJsonLayer.addData(features);
+        return features;
     }
 
     // Helper function to check if a feature matches an Overpass filter
@@ -962,6 +977,7 @@ export class RoadProcessor {
                 }
                 
                 // Create coordinate mappings for CPP export/import
+                roadFeatures = this.prepareRoadFeatures(roadFeatures);
                 createCoordinateMappingsCallback(roadFeatures);
                 
                 // Create a new GeoJSON layer for roads
@@ -1276,6 +1292,7 @@ export class RoadProcessor {
             });
             
             // Create coordinate mappings for CPP export/import
+            roadFeatures = this.prepareRoadFeatures(roadFeatures);
             createCoordinateMappingsCallback(roadFeatures);
             
             // Create a new GeoJSON layer for roads
@@ -1401,6 +1418,7 @@ export class RoadProcessor {
     }
 
     clearLayers() {
+        this.originalRoadFeatures = [];
         if (this.geoJsonLayer) {
             this.mapManager.getMap().removeLayer(this.geoJsonLayer);
             this.geoJsonLayer = null;

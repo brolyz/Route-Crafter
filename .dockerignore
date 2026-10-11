@@ -1,0 +1,9 @@
+.git
+.github
+node_modules
+tests
+*.log
+.env
+.env.*
+server.bat
+original.html
