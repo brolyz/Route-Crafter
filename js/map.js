@@ -359,6 +359,7 @@ export class MapManager {
                         <div id="customOverpassEndpointContainer" class="main-controls-row main-controls-custom-endpoint" style="display: none;">
                             <input type="text" id="customOverpassEndpoint" class="main-controls-input-wide" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="https://example.com/api/interpreter">
                         </div>
+                        <div id="overpassRequestStatus" class="overpass-request-status" role="status" aria-live="polite"></div>
                         <div class="main-controls-row">
                             <label for="exportFormatSelect">Route Solver:</label>
                             <select id="exportFormatSelect">

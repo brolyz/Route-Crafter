@@ -65,9 +65,22 @@ O navegador de cada usuário precisa acessar os provedores de mapas e a API Over
 | Google Maps, Satélite e Híbrido | `mt0.google.com`, `mt1.google.com`, `mt2.google.com`, `mt3.google.com` |
 | OpenStreetMap padrão | `a.tile.openstreetmap.org`, `b.tile.openstreetmap.org`, `c.tile.openstreetmap.org` |
 | Ruas e áreas | `overpass-api.de` |
+| Servidores alternativos para busca de ruas | `overpass.private.coffee`, `overpass.openstreetmap.fr` |
 | Pesquisa de lugares | `nominatim.openstreetmap.org` |
 
 Camadas alternativas, endpoints Overpass personalizados e coberturas de imagens usam outros domínios. Uma falha nesses serviços externos não implica falha no container. Os tiles Google são acessados diretamente, sem SDK ou chave de API; esses endpoints não são documentados e podem mudar ou deixar de funcionar. O uso continua sujeito aos termos do provedor.
+
+## Quando Fetch Roads retorna erro 504
+
+O erro 504 indica que a consulta ao servidor Overpass não terminou a tempo. A busca de ruas agora permite 60 segundos de processamento e limita cada tentativa a 75 segundos no navegador. Em falhas temporárias, o programa tenta os outros servidores globais automaticamente e mostra o servidor usado na tela. Não é necessário clicar várias vezes: aguarde a conclusão das tentativas.
+
+Endpoints personalizados e regionais continuam usando somente o servidor escolhido. Se todos os servidores falharem, diminua o polígono ou o **Boundary buffer**, ou selecione outra instância Overpass. Servidores públicos podem ficar sobrecarregados mesmo quando o container está saudável.
+
+Depois de atualizar o código no servidor, reconstrua a imagem para carregar a correção:
+
+```sh
+docker compose up -d --build
+```
 
 ## Editar ruas e passagens
 

@@ -23,7 +23,7 @@ See [the complete deployment and usage guide in Portuguese](docs/SELF_HOSTING.pt
 For local development, run `python3 -m http.server 8000` from this directory. Dependencies are vendored; there is no install step. Geometry tests use Node.js 22+ and the vendored Turf library:
 
 ```sh
-node --test tests/road-edits.test.mjs
+node --test tests/*.test.mjs
 ```
 
 An optional browser smoke test covers fetching fixture roads, exclusion polygons, snapping a manual bypass, route generation, GPX export and editing/reset. Install its tooling outside the checkout and run it while the local server is running:
@@ -96,6 +96,10 @@ Like a media player, you can play, pause, drag to seek, change the speed of a pr
 
 ## Overpass endpoint
 Choose your preferred Overpass API endpoint to retrieve areas and roads. The default instance provided by [https://overpass-api.de/](https://overpass-api.de/) can get very busy so you may choose an alternative instance.
+
+**Fetch Roads** requests road geometry with a 60-second Overpass query limit and a 75-second client limit per attempt. If a public global server times out or returns a temporary error (including HTTP 504, 503 or 429), the app tries the other global instances at `overpass.private.coffee` and `overpass.openstreetmap.fr`, starting with your selected instance. The progress message shows which server is in use. Each instance is attempted once; invalid queries and access denials stop immediately. Custom and regional endpoints stay on the selected server and do not switch automatically.
+
+If every attempt fails, try a smaller polygon, reduce **Boundary buffer**, or choose another Overpass endpoint. Partial responses containing an Overpass error are rejected rather than used as complete road data. The browser smoke test includes a simulated HTTP 504 followed by a successful alternate-server response.
 
 ## Route Solvers
 To be able to find the most efficient route, we use the [Chinese Postman Problem](https://en.wikipedia.org/wiki/Chinese_postman_problem) theory and its variants. There are different solvers to choose from, depending on your needs where some will create a shorter route than others.

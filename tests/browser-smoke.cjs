@@ -13,7 +13,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
         const errors = [], dialogs = [];
         page.on('pageerror', error => errors.push(error.message));
         page.on('dialog', async dialog => { dialogs.push(dialog.message()); await dialog.accept(); });
-        let fetches = 0;
+        const fetches = [];
         const nodes = [
             { type: 'node', id: 1, lon: -0.09, lat: 51.505 },
             { type: 'node', id: 2, lon: -0.086, lat: 51.505 },
@@ -23,9 +23,19 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
         const ways = [[1, 2], [2, 3], [3, 4], [4, 1]].map((nodes, index) => ({
             type: 'way', id: 10 + index, nodes, tags: { highway: 'residential', name: `Road ${index}` }
         }));
-        await page.route('https://overpass-api.de/api/interpreter', route => {
-            fetches++;
-            return route.fulfill({ json: { version: 0.6, elements: [...nodes, ...ways] } });
+        await page.route(/^https:\/\/(overpass-api\.de|overpass\.private\.coffee|overpass\.openstreetmap\.fr)\/api\/interpreter$/, route => {
+            const request = route.request();
+            const host = new URL(request.url()).hostname;
+            fetches.push(host);
+            const query = new URLSearchParams(request.postData()).get('data');
+            assert(query.includes('[timeout:60]') && query.includes('out geom;'));
+            assert(!query.includes('(._;>;)'));
+            if (host === 'overpass-api.de') return route.fulfill({ status: 504, body: 'Gateway Timeout' });
+            const geometryWays = ways.map(way => ({ ...way, geometry: way.nodes.map(id => {
+                const node = nodes.find(node => node.id === id);
+                return { lat: node.lat, lon: node.lon };
+            }) }));
+            return route.fulfill({ json: { version: 0.6, elements: geometryWays } });
         });
         // Network-independent smoke test. Tile availability is a separate check.
         await page.route(/https:\/\/(?:[abc]\.tile\.openstreetmap\.org|mt[0-3]\.google\.com)\//, route =>
@@ -56,7 +66,8 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
         await page.click('#previewGPXButton');
         await page.waitForFunction(() => window.app.roadProcessor.getGeoJsonLayer()?.getLayers().length > 0 &&
             !document.getElementById('previewGPXButton').classList.contains('button-loading'));
-        assert.equal(fetches, 1);
+        assert.deepEqual(fetches, ['overpass-api.de', 'overpass.private.coffee']);
+        assert((await page.locator('#overpassRequestStatus').textContent()).includes('overpass.private.coffee'));
         await page.evaluate(() => window.app.mapManager.handleSetDepot(L.latLng(51.505, -0.09)));
         await page.click('#generateRouteButton');
         await page.waitForFunction(() => window.app.routeGenerated);
@@ -94,7 +105,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
         assert.deepEqual(edits.manual.geometry.coordinates[0], [-0.089, 51.505]);
         assert(edits.excludedSegments.every(inside => !inside));
         assert(!edits.status.includes('disconnected'));
-        assert.equal(fetches, 1, 'edits must reuse fetched roads');
+        assert.equal(fetches.length, 2, 'edits must reuse fetched roads');
 
         await page.click('#generateRouteButton');
         await page.waitForFunction(() => window.app.routeGenerated);
@@ -128,7 +139,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
         assert.equal(await page.evaluate(() => window.app.roadProcessor.originalRoadFeatures.length), 0);
         assert.deepEqual(errors, []);
         assert.deepEqual(dialogs, []);
-        console.log('PASS: Google layer modes; fetch → exclusion → snapped passage → solver → GPX; edit/delete/reset; no JS errors.');
+        console.log('PASS: automatic recovery from HTTP 504; geometry-only roads; Google layer modes; exclusion → passage → solver → GPX; edit/delete/reset; no JS errors.');
     } finally {
         await browser.close();
     }

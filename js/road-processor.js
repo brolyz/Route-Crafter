@@ -1,6 +1,7 @@
 // Road fetching and processing module
 
 import { getSelectedOverpassEndpoint, reportInvalidOverpassEndpoint, stopSpinner } from './utils.js';
+import { OVERPASS_QUERY_TIMEOUT_SECONDS, requestOverpass } from './overpass-client.js';
 
 export class RoadProcessor {
     constructor(mapManager, areaManager, coverageManager) {
@@ -390,6 +391,7 @@ export class RoadProcessor {
 
     fetchRoadsInArea(createCoordinateMappingsCallback) {
         const previewGPXButton = document.getElementById('previewGPXButton');
+        if (previewGPXButton.classList.contains('button-loading')) return;
         previewGPXButton.classList.add('button-loading');
         previewGPXButton.innerHTML = 'Fetching Roads <span class="spinner"></span>';
 
@@ -592,10 +594,9 @@ export class RoadProcessor {
             
             // Create Overpass query using poly filter for precise polygon filtering
             const overpassQuery = `
-                [out:json][timeout:30];
+                [out:json][timeout:${OVERPASS_QUERY_TIMEOUT_SECONDS}];
                 ${queryBody}
-                (._;>;);
-                out body;
+                out geom;
             `;
             
             // Minify query to reduce URL length
@@ -609,41 +610,16 @@ export class RoadProcessor {
                 return;
             }
 
-            fetch(overpassEndpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
-                },
-                body: 'data=' + encodeURIComponent(minifiedQuery)
-            }).then(response => {
-                if (!response.ok) {
-                    let errorMessage = '';
-                    switch (response.status) {
-                        case 504:
-                            errorMessage = 'Gateway Timeout (504): The server took too long to respond. Please try again.';
-                            break;
-                        case 502:
-                            errorMessage = 'Bad Gateway (502): The server is temporarily unavailable. Please try again later.';
-                            break;
-                        case 503:
-                            errorMessage = 'Service Unavailable (503): The server is temporarily overloaded. Please try again later.';
-                            break;
-                        case 429:
-                            errorMessage = 'Too Many Requests (429): Rate limit exceeded. Please wait a moment before trying again.';
-                            break;
-                        case 400:
-                            errorMessage = 'Bad Request (400): Invalid query parameters. Please try a different search.';
-                            break;
-                        default:
-                            errorMessage = `Server Error (${response.status}): ${response.statusText}. Please try again.`;
-                    }
-                    throw new Error(errorMessage);
+            requestOverpass(minifiedQuery, {
+                endpoint: overpassEndpoint,
+                onAttempt: ({ endpoint, attempt, total }) => {
+                    previewGPXButton.innerHTML = `Fetching Roads (${attempt}/${total}) <span class="spinner"></span>`;
+                    document.getElementById('overpassRequestStatus').textContent =
+                        `Fetching roads from ${new URL(endpoint).hostname} (${attempt}/${total})…`;
                 }
-                return response.json();
-            }).then(async data => {
-                if (data.remark && data.remark.includes('Query timed out')) {
-                    throw new Error('Too many results. Please zoom into a smaller area. (Overpass query timed out after 30 seconds)');
-                }
+            }).then(async ({ data, endpoint }) => {
+                document.getElementById('overpassRequestStatus').textContent = `Roads received from ${new URL(endpoint).hostname}.`;
+                window.overpassEndpointUsed = endpoint;
                 
                 // Store the raw Overpass response for download
                 window.overpassResponse = data;
@@ -1187,6 +1163,7 @@ export class RoadProcessor {
                 
             }).catch(err => {
                 console.error('Error fetching roads:', err);
+                document.getElementById('overpassRequestStatus').textContent = 'Road fetch failed. Try a smaller area or another Overpass endpoint.';
                 // If poly filter fails, provide helpful error message
                 if (err.message.includes('Invalid') || err.message.includes('poly')) {
                     alert('Error: The selected area might be too complex for server-side filtering. Try selecting a simpler area or reducing the buffer size.');
