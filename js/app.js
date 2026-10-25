@@ -4,6 +4,7 @@ import { MapManager } from './map.js';
 import { RoutingManager } from './routing.js';
 import { CoverageManager } from './coverage.js';
 import { AreaManager } from './area-manager.js';
+import { readAreaFile } from './area-import.js';
 import { RoadProcessor } from './road-processor.js';
 import { RouteEditor } from './route-editor.js';
 import { GraphBuilder } from './graph-builder.js';
@@ -32,6 +33,7 @@ export class RouteCrafterApp {
         this.routeStale = false;
         this.programmaticResetInProgress = false;
         this.lastRouteSolverFormat = null;
+        this.areaImportRevision = 0;
         
         // Coordinate mappings (shared state across modules)
         this.coordinateToNodeIdMap = new Map();
@@ -308,6 +310,35 @@ export class RouteCrafterApp {
     }
 
     setupEventListeners() {
+        const areaImportInput = document.getElementById('areaImportInput');
+        const importAreaButton = document.getElementById('importAreaButton');
+        const importStatus = document.getElementById('areaImportStatus');
+        importAreaButton.addEventListener('click', () => areaImportInput.click());
+        areaImportInput.addEventListener('change', async () => {
+            const file = areaImportInput.files[0];
+            if (!file || importAreaButton.disabled) return;
+            const revision = ++this.areaImportRevision;
+            importAreaButton.disabled = true;
+            importStatus.textContent = 'Reading area file…';
+            importStatus.dataset.state = 'loading';
+            try {
+                const collection = await readAreaFile(file);
+                if (revision !== this.areaImportRevision) return;
+                this.routeEditor.finishDrawing();
+                this.areaManager.addImportedAreas(collection);
+                this.markRoadSettingsChanged();
+                importStatus.textContent = `Imported ${collection.features.length} area(s) from ${file.name}. Click Fetch Roads when ready.`;
+                importStatus.dataset.state = 'success';
+            } catch (error) {
+                if (revision !== this.areaImportRevision) return;
+                importStatus.textContent = error.message || 'Unable to import this area file.';
+                importStatus.dataset.state = 'error';
+            } finally {
+                importAreaButton.disabled = false;
+                areaImportInput.value = '';
+            }
+        });
+
         // Search rules dropdown change handler
         document.getElementById('searchRules').addEventListener('change', (event) => {
             const selectedValue = event.target.value;
@@ -360,7 +391,10 @@ export class RouteCrafterApp {
 
         // Draw events
         this.mapManager.getMap().on(L.Draw.Event.CREATED, (event) => {
-            if (!this.routeEditor.handleDrawCreated(event)) this.areaManager.handleDrawCreated(event);
+            if (!this.routeEditor.handleDrawCreated(event)) {
+                this.areaManager.handleDrawCreated(event);
+                this.markRoadSettingsChanged();
+            }
         });
 
         // Handle draw deleted event
@@ -377,6 +411,7 @@ export class RouteCrafterApp {
             });
             // Update preview after deletion
             this.areaManager.previewCombinedPolygon();
+            this.markRoadSettingsChanged();
         });
 
         // Handle draw edited event
@@ -384,6 +419,7 @@ export class RouteCrafterApp {
             if (this.routeEditor.handleLayersChanged(event)) return;
             // Update preview after editing
             this.areaManager.previewCombinedPolygon();
+            this.markRoadSettingsChanged();
         });
 
         // Buffer size changes
@@ -1246,6 +1282,7 @@ export class RouteCrafterApp {
     }
 
     clearAllSelectionsWithoutResettingDropdown() {
+        this.areaImportRevision++;
         this.programmaticResetInProgress = true;
 
         try {
@@ -1283,6 +1320,8 @@ export class RouteCrafterApp {
 
             // Reset UI elements (but not the dropdown)
             document.getElementById('routeLength').innerHTML = '';
+            document.getElementById('areaImportStatus').textContent = '';
+            document.getElementById('areaImportStatus').removeAttribute('data-state');
             document.getElementById('searchBox').value = '';
             document.getElementById('bufferSize').value = '1';
             document.getElementById('truncateByEdge').checked = true;

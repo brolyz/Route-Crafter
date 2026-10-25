@@ -38,6 +38,20 @@ export class AreaManager {
         this.previousSearchRule = rule;
     }
 
+    addImportedAreas(collection) {
+        const layers = collection.features.map(feature => L.geoJSON(feature).getLayers()[0]);
+        layers.forEach(layer => {
+            this.handleDrawCreated({ layer, layerType: 'polygon' });
+            this.selectPolygon(layer);
+            const label = document.createElement('span');
+            label.textContent = layer.feature.properties.name;
+            layer.bindTooltip(label);
+        });
+        this.mapManager.enableDrawControl();
+        this.previewCombinedPolygon();
+        this.mapManager.getMap().fitBounds(L.featureGroup(layers).getBounds(), { padding: [20, 20] });
+    }
+
     shouldIgnoreAreaClick(event) {
         if (!this.mapManager || !this.mapManager.isDepotSelectionModeActive || !this.mapManager.isDepotSelectionModeActive()) {
             return false;
@@ -120,11 +134,11 @@ export class AreaManager {
             this.mapManager.getMap().removeLayer(this.previewLayer);
         }
         
-        const coordinates = drawnLayer.getLatLngs()[0];
-        const polygon = turf.polygon([coordinates.map(coord => [coord.lng, coord.lat])]);
+        const polygon = drawnLayer.toGeoJSON();
         
         // Apply buffer if specified
-        const bufferSize = parseFloat(document.getElementById('bufferSize').value) || 1;
+        const rawBufferSize = parseFloat(document.getElementById('bufferSize').value);
+        const bufferSize = Number.isFinite(rawBufferSize) ? rawBufferSize : 0;
         const bufferedPolygon = turf.buffer(polygon, bufferSize, { units: 'meters' });
         
         // Create preview layer

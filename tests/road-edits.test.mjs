@@ -1,12 +1,36 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { applyRoadEdits } from '../js/road-edits.js';
+import { applyRoadEdits, clipRoadsToArea, splitRoadAtAreaBoundary } from '../js/road-edits.js';
 
 const require = createRequire(import.meta.url);
 globalThis.turf = require('../vendor/turf/6.5.0/turf.min.js');
 const road = coords => turf.lineString(coords, { name: 'OSM road', oneway: 'yes', isRouteRequired: true });
 const box = (west, south, east, north) => turf.bboxPolygon([west, south, east, north]);
+
+test('area trimming clips crossings with both original endpoints outside the area', () => {
+    const original = road([[0, 0], [0.01, 0]]);
+    const trimmed = clipRoadsToArea([original], box(0.002, -0.001, 0.008, 0.001));
+    assert.deepEqual(trimmed[0].geometry.coordinates, [[0.002, 0], [0.008, 0]]);
+    assert.equal(trimmed[0].properties.oneway, 'yes');
+    assert.deepEqual(original.geometry.coordinates, [[0, 0], [0.01, 0]]);
+});
+
+test('imported area holes are trimmed or marked as outside navigation boundaries', () => {
+    const polygon = turf.polygon([
+        [[0.002, -0.001], [0.008, -0.001], [0.008, 0.001], [0.002, 0.001], [0.002, -0.001]],
+        [[0.004, -0.0005], [0.004, 0.0005], [0.006, 0.0005], [0.006, -0.0005], [0.004, -0.0005]]
+    ]);
+    const original = road([[0, 0], [0.01, 0]]);
+    assert.deepEqual(clipRoadsToArea([original], polygon).map(feature => feature.geometry.coordinates), [
+        [[0.002, 0], [0.004, 0]], [[0.006, 0], [0.008, 0]]
+    ]);
+    const split = splitRoadAtAreaBoundary(original, polygon);
+    assert.equal(split.filter(feature => !feature.properties.isOutsideBoundary).length, 2);
+    assert.deepEqual(split.filter(feature => feature.properties.isOutsideBoundary).map(feature => feature.geometry.coordinates), [
+        [[0, 0], [0.002, 0]], [[0.004, 0], [0.006, 0]], [[0.008, 0], [0.01, 0]]
+    ]);
+});
 
 test('exclusion cuts a crossing even when the original road has no vertex inside', () => {
     const original = road([[0, 0], [0.01, 0]]);

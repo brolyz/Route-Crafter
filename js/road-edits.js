@@ -17,12 +17,12 @@ function featureWithCoordinates(feature, coordinates) {
     return { ...feature, properties: { ...feature.properties }, geometry: { type: 'LineString', coordinates } };
 }
 
-function outsideExclusions(feature, polygons) {
+function outsideExclusions(feature, polygons, keepInside = false) {
     let pieces = [feature];
     for (const polygon of polygons) {
         const boundary = turf.polygonToLine(polygon);
         pieces = pieces.flatMap(piece => {
-            if (!turf.booleanIntersects(piece, polygon)) return [piece];
+            if (!turf.booleanIntersects(piece, polygon)) return keepInside ? [] : [piece];
             const result = [];
             let current = [];
             const flush = () => {
@@ -40,7 +40,7 @@ function outsideExclusions(feature, polygons) {
                 for (let j = 1; j < cuts.length; j++) {
                     const start = at(cuts[j - 1]), end = at(cuts[j]);
                     const midpoint = turf.point(at((cuts[j - 1] + cuts[j]) / 2));
-                    if (turf.booleanPointInPolygon(midpoint, polygon)) {
+                    if (turf.booleanPointInPolygon(midpoint, polygon) !== keepInside) {
                         flush();
                     } else if (!samePoint(start, end)) {
                         if (current.length && !samePoint(current[current.length - 1], start)) flush();
@@ -54,6 +54,22 @@ function outsideExclusions(feature, polygons) {
         });
     }
     return pieces;
+}
+
+export function clipRoadsToArea(roads, polygon) {
+    return roads.flatMap(feature => feature.geometry.type === 'LineString'
+        ? outsideExclusions(feature, [polygon], true) : []);
+}
+
+export function splitRoadAtAreaBoundary(feature, polygon) {
+    return [
+        ...outsideExclusions(feature, [polygon], true).map(piece => ({
+            ...piece, properties: { ...piece.properties, isOutsideBoundary: false }
+        })),
+        ...outsideExclusions(feature, [polygon]).map(piece => ({
+            ...piece, properties: { ...piece.properties, isOutsideBoundary: true }
+        }))
+    ];
 }
 
 function snapEndpoint(point, features, tolerance) {

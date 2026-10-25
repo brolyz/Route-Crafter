@@ -568,6 +568,15 @@ button:hover {
     line-height: 1.4;
 }
 
+.area-import-status {
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.area-import-status[data-state="error"] {
+    color: #b42318;
+}
+
 #setStartingLocationButton.active {
     background-color: #198754;
 }

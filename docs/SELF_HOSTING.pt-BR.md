@@ -82,6 +82,14 @@ Depois de atualizar o código no servidor, reconstrua a imagem para carregar a c
 docker compose up -d --build
 ```
 
+## Importar uma área de interesse em KMZ ou KML
+
+Clique em **Import KMZ / KML area**, selecione o arquivo e aguarde a área aparecer selecionada no mapa. Depois clique em **Fetch Roads** para buscar as ruas e prossiga com a geração da rota. A importação ocorre inteiramente no navegador, sem enviar o arquivo para um servidor.
+
+São aceitos polígonos com limites internos, vários polígonos e arquivos KML dentro de pastas do KMZ. Pontos, linhas, imagens e links para documentos externos são ignorados. O arquivo deve usar UTF-8 e ter até 20 MB; o conteúdo KML descompactado pode ocupar até 10 MB em 64 documentos, com até 200 mil coordenadas por documento.
+
+Novas importações acrescentam áreas às existentes. Para começar apenas com a área do novo arquivo, clique em **Reset** antes. Use a barra de edição/exclusão do mapa para ajustar os polígonos importados. Depois de editar, clique novamente em **Fetch Roads**. Áreas desconectadas continuam sujeitas às regras de buffer e maior componente conectado. Os desenhos importados duram apenas na sessão atual da página.
+
 ## Editar ruas e passagens
 
 1. Desenhe ou selecione a área e clique em **Fetch Roads**.

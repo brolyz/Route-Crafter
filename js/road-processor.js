@@ -2,6 +2,7 @@
 
 import { getSelectedOverpassEndpoint, reportInvalidOverpassEndpoint, stopSpinner } from './utils.js';
 import { OVERPASS_QUERY_TIMEOUT_SECONDS, requestOverpass } from './overpass-client.js';
+import { clipRoadsToArea, splitRoadAtAreaBoundary } from './road-edits.js';
 
 export class RoadProcessor {
     constructor(mapManager, areaManager, coverageManager) {
@@ -122,108 +123,7 @@ export class RoadProcessor {
 
     // Helper function to trim road segments that extend beyond the polygon boundary
     trimRoadsToPolygon(roadFeatures, polygon) {
-        const trimmedRoads = [];
-        
-        // Ensure polygon is in the correct format
-        let polygonFeature;
-        if (polygon.geometry && polygon.geometry.type === 'Polygon') {
-            polygonFeature = polygon;
-        } else if (polygon.type === 'Feature' && polygon.geometry.type === 'Polygon') {
-            polygonFeature = polygon;
-        } else {
-            console.error('Invalid polygon format for trimming:', polygon);
-            return roadFeatures; // Return original roads if polygon is invalid
-        }
-        
-        console.log('Trimming roads to polygon boundary...');
-        
-        roadFeatures.forEach((feature, index) => {
-            if (feature.geometry.type !== 'LineString') {
-                trimmedRoads.push(feature);
-                return;
-            }
-            
-            try {
-                // Validate road coordinates
-                const coords = feature.geometry.coordinates;
-                if (!coords || coords.length < 2) {
-                    console.log(`Road ${index} has invalid coordinates, skipping`);
-                    return;
-                }
-                
-                const roadLine = turf.lineString(coords);
-                
-                // Validate the road line
-                if (!roadLine || !roadLine.geometry) {
-                    console.log(`Road ${index} could not be converted to LineString, skipping`);
-                    return;
-                }
-                
-                // Check if road is completely inside polygon
-                const isInside = turf.booleanWithin(roadLine, polygonFeature);
-                if (isInside) {
-                    trimmedRoads.push(feature);
-                    return;
-                }
-                
-                // Check if road intersects with polygon
-                const intersects = turf.booleanIntersects(roadLine, polygonFeature);
-                if (!intersects) {
-                    return;
-                }
-                
-                // Use intersect for clipping - but handle the geometry validation issue
-                let intersection;
-                try {
-                    intersection = turf.intersect(roadLine, polygonFeature);
-                } catch (intersectError) {
-                    // Fallback: find intersection points and trim to boundary
-                    const trimmedCoords = this.trimRoadToPolygonBoundary(coords, polygonFeature);
-                    
-                    if (trimmedCoords && trimmedCoords.length >= 2) {
-                        const trimmedFeature = {
-                            ...feature,
-                            geometry: {
-                                type: 'LineString',
-                                coordinates: trimmedCoords
-                            }
-                        };
-                        trimmedRoads.push(trimmedFeature);
-                        console.log(`Road ${index} trimmed using boundary method`);
-                    }
-                    return;
-                }
-                
-                if (intersection && intersection.geometry) {
-                    if (intersection.geometry.type === 'LineString') {
-                        const trimmedFeature = {
-                            ...feature,
-                            geometry: intersection.geometry
-                        };
-                        trimmedRoads.push(trimmedFeature);
-                    } else if (intersection.geometry.type === 'MultiLineString') {
-                        intersection.geometry.coordinates.forEach(coords => {
-                            const trimmedFeature = {
-                                ...feature,
-                                geometry: {
-                                    type: 'LineString',
-                                    coordinates: coords
-                                }
-                            };
-                            trimmedRoads.push(trimmedFeature);
-                        });
-                    }
-                }
-                
-            } catch (error) {
-                console.warn(`Error processing road ${index}:`, error);
-                // If processing fails, include the original road
-                trimmedRoads.push(feature);
-            }
-        });
-        
-        console.log(`Trimmed ${roadFeatures.length} roads to ${trimmedRoads.length} segments`);
-        return trimmedRoads;
+        return clipRoadsToArea(roadFeatures, polygon);
     }
 
     // Helper function to trim road to polygon boundary by finding intersection points
@@ -291,102 +191,7 @@ export class RoadProcessor {
 
     // Helper function to split a road at the boundary into inside and outside parts
     splitRoadAtBoundary(feature, polygon) {
-        const result = [];
-        const coords = feature.geometry.coordinates;
-        
-        if (coords.length < 2) {
-            result.push(feature);
-            return result;
-        }
-        
-        // Check each coordinate to see if it's inside or outside the boundary
-        const coordStatus = coords.map(coord => {
-            const point = turf.point(coord);
-            return turf.booleanWithin(point, polygon);
-        });
-        
-        const polygonBoundary = turf.polygonToLine(polygon);
-        
-        // Build segments by walking through the coordinates
-        let currentSegment = [];
-        let currentSegmentIsInside = null;
-        
-        for (let i = 0; i < coords.length; i++) {
-            const coord = coords[i];
-            const isInside = coordStatus[i];
-            
-            // Initialize the segment type on first point
-            if (currentSegmentIsInside === null) {
-                currentSegmentIsInside = isInside;
-                currentSegment.push(coord);
-                continue;
-            }
-            
-            // Check if we're transitioning between inside and outside
-            if (i > 0 && coordStatus[i - 1] !== isInside) {
-                // Find the intersection point where the road crosses the boundary
-                const segment = turf.lineString([coords[i - 1], coord]);
-                const intersection = this.findLineIntersection(segment, polygonBoundary);
-                
-                if (intersection) {
-                    // Close current segment at intersection point
-                    currentSegment.push(intersection);
-                    
-                    // Save current segment if it has at least 2 points
-                    if (currentSegment.length >= 2) {
-                        result.push({
-                            ...feature,
-                            geometry: {
-                                type: 'LineString',
-                                coordinates: [...currentSegment]
-                            },
-                            properties: {
-                                ...feature.properties,
-                                isOutsideBoundary: !currentSegmentIsInside
-                            }
-                        });
-                    }
-                    
-                    // Start new segment from intersection point
-                    currentSegment = [intersection, coord];
-                    currentSegmentIsInside = isInside;
-                } else {
-                    // No intersection found, just continue
-                    currentSegment.push(coord);
-                }
-            } else {
-                // Same status as previous point, just add it
-                currentSegment.push(coord);
-            }
-        }
-        
-        // Save the final segment
-        if (currentSegment.length >= 2) {
-            result.push({
-                ...feature,
-                geometry: {
-                    type: 'LineString',
-                    coordinates: currentSegment
-                },
-                properties: {
-                    ...feature.properties,
-                    isOutsideBoundary: !currentSegmentIsInside
-                }
-            });
-        }
-        
-        // If no valid segments were created, return the original feature as inside
-        if (result.length === 0) {
-            result.push({
-                ...feature,
-                properties: {
-                    ...feature.properties,
-                    isOutsideBoundary: false
-                }
-            });
-        }
-        
-        return result;
+        return splitRoadAtAreaBoundary(feature, polygon);
     }
 
     fetchRoadsInArea(createCoordinateMappingsCallback) {
@@ -401,7 +206,7 @@ export class RoadProcessor {
         // Add drawn items to the selection
         this.mapManager.getDrawnItems().eachLayer((layer) => {
             if (layer instanceof L.Polygon || layer instanceof L.Rectangle) {
-                allSelectedAreas.push(layer);
+                if (!allSelectedAreas.includes(layer)) allSelectedAreas.push(layer);
             }
         });
         
@@ -663,18 +468,8 @@ export class RoadProcessor {
                             feature.properties.isOutsideBoundary = true;
                             splitRoads.push(feature);
                         } else {
-                            // Check if completely inside
-                            const isWithin = turf.booleanWithin(roadLine, combinedPolygon);
-                            
-                            if (isWithin) {
-                                // Completely inside - keep as is
-                                feature.properties.isOutsideBoundary = false;
-                                splitRoads.push(feature);
-                            } else {
-                                // Crosses boundary - split it
-                                const splitResult = this.splitRoadAtBoundary(feature, combinedPolygon);
-                                splitRoads.push(...splitResult);
-                            }
+                            // Split at every crossing, including holes in imported KML areas.
+                            splitRoads.push(...this.splitRoadAtBoundary(feature, combinedPolygon));
                         }
                     });
                     

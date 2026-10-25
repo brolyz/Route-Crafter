@@ -82,6 +82,20 @@ Are the OpenStreetMap areas unsuitable? There are some additional options you ca
 ## Fetch Roads
 Once you have picked your areas, click 'Fetch Roads',  it will retrieve the OSM ways based on your filters (see below).
 
+## Import a KMZ or KML area
+
+Click **Import KMZ / KML area** and choose your `.kmz` (Google Earth) or `.kml` file. Polygon areas are added to the map, selected automatically, and the view moves to them. Then click **Fetch Roads** and follow the normal route-generation workflow. You can import additional files without removing the current areas. Use **Reset** first if you want to replace them.
+
+Import runs locally in the browser, supports nested folders, multiple polygons, `MultiGeometry` and polygon holes, and ignores altitude, images, point markers, paths and external network links. KMZ files can contain multiple embedded KML documents. Files must use UTF-8; the upload limit is 20 MB, with at most 10 MB of embedded KML across 64 documents and 200,000 coordinates per document. Invalid files leave the current areas and route intact.
+
+Imported polygons use the ordinary map edit/delete toolbar. After editing an area, fetch roads again before generating a new route. **Trim roads to polygon boundary** also trims streets around holes; with navigation outside the boundary enabled, those outside portions can be optional roads. Disconnected polygons follow the existing area-buffer and largest-connected-component rules. Imports last for the current page session and are cleared by Reset or a page reload.
+
+The browser import regression test uses the same optional Playwright setup described above:
+
+```sh
+PLAYWRIGHT_MODULE=/tmp/route-crafter-browser-tools/node_modules/playwright node tests/kmz-browser-smoke.cjs
+```
+
 ## Generate Route
 Press 'Generate Route' to send the roads to the ArcRoutingLibrary solver to create the route solution.
 

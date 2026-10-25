@@ -86,6 +86,13 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+## fflate 0.8.2
+
+`vendor/fflate/0.8.2/browser.js` is the unmodified `esm/browser.js` from the
+`fflate@0.8.2` npm package (https://github.com/101arrowz/fflate).
+It is distributed under the MIT license. The full license is included in
+[`fflate/0.8.2/LICENSE`](fflate/0.8.2/LICENSE).
+
 ## Turf
 
 The MIT License (MIT)

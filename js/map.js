@@ -319,6 +319,11 @@ export class MapManager {
                             <button id="fetchButton">Find Areas</button>
                         </div>
                         <div class="main-controls-actions">
+                        <button id="importAreaButton" type="button">Import KMZ / KML area</button>
+                        <input id="areaImportInput" type="file" accept=".kmz,.kml,application/vnd.google-earth.kmz,application/vnd.google-earth.kml+xml" hidden>
+                        </div>
+                        <div id="areaImportStatus" class="area-import-status" role="status" aria-live="polite"></div>
+                        <div class="main-controls-actions">
                         <button id="setStartingLocationButton">Set Starting Location</button>
                         <button id="previewGPXButton">Fetch Roads</button>
                         <button id="generateRouteButton">Generate Route</button>
